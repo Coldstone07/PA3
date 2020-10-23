@@ -18,6 +18,7 @@ def traverse_nodes(node, board, state, identity):
     Returns:        A node from which the next stage of the search can proceed.
 
     """
+    print("Node type", node.type, "Node: ", node)
     pass
     # Hint: return leaf_node
 

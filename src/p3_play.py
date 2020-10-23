@@ -13,7 +13,8 @@ def get_human_input(board, state):
     if board.is_legal(state, action):
         return action
     else:
-        print("Please input moves as space-separated lists of numbers.  Remember that you can only move in the board corresponding to your opponent's last move!")
+        print("Please input moves as space-separated lists of numbers.  Remember that you can only move in the board "
+              "corresponding to your opponent's last move!")
         return get_human_input(board, state)
 
 players = dict(
