@@ -2,7 +2,7 @@ from mcts_node import MCTSNode
 from random import choice
 from math import sqrt, log
 
-num_nodes = 1000
+num_nodes = 100
 explore_faction = 2.
 
 
@@ -19,30 +19,35 @@ def traverse_nodes(node, board, state, identity):
 
     """
 
-    # do Upper Confidence Bounds for Trees to find the proper leaf node
-    if node.child_nodes:  # check if current node has children
-        UCB = dict()  # dict of upper confidence bound
-        for child in node.child_nodes.values():
-            # do the formula
-            exploit = child.wins / child.visits if child.visits != 0 else 0
-            explore = 2 * sqrt(log(node.visits) / child.visits) if child.visits != 0 else 0
-            UCB[child] = exploit + explore
-            if UCB[child] == 0:
-                return child
-        print("Printing the dictionary: ", UCB.keys(), UCB.values())
-
-        highestChild = max(UCB, key=UCB.get)
-    else:
-        return node
-
-    if highestChild.untried_actions:
-        leaf_node = highestChild
-    else:
-        if highestChild.child_nodes:
-            leaf_node = traverse_nodes(highestChild, board, state, identity)
+    if node.untried_actions:
+        return node, 1
+    else:  # if no untried action
+        if node.child_nodes:  # check if current node has children
+            prev_player = board.previous_player(state)
+            UCB = dict()  # dict of upper confidence bound
+            for child in node.child_nodes.values():  # do Upper Confidence Bounds for Trees to find the proper leaf nod
+                exploit = child.wins / child.visits
+                explore = explore_faction * sqrt(log(node.visits) / child.visits)
+                if board.current_player(state) == identity:  # we want to win so exploit to win
+                    UCB[child] = exploit + explore
+                else:  # we want to not win
+                    UCB[child] = (1 - exploit) + explore
+            # print("Printing the dictionary: ", UCB.keys(), UCB.values())
+            highestChild = max(UCB, key=UCB.get)
+            # print("UCB:, ", UCB, "Highest Child: ", highestChild)
+            state = board.next_state(state, highestChild.parent_action)
+            return traverse_nodes(highestChild, board, state, prev_player)
         else:
-            leaf_node = highestChild
-    return leaf_node
+            return node, 0
+
+    # if highestChild.untried_actions:
+    #     leaf_node = highestChild
+    # else:
+    #     if highestChild.child_nodes:
+    #         leaf_node = traverse_nodes(highestChild, board, state, identity)
+    #     else:
+    #         leaf_node = node
+    # return leaf_node
     # for the nodes with the highest Upper Confidenc Bound
     # if untried action, then return it
 
@@ -65,13 +70,14 @@ def expand_leaf(node, board, state):
     Returns:    The added child node.
 
     """
-    print("State: ", state)
-    action = node.untried_actions.pop()
+    # print("State: ", state)
+    action = choice(node.untried_actions)
+    node.untried_actions.remove(action)
     state = board.next_state(state, action)
-    print("Updated state: ", state)
+    # print("Updated state: ", state)
     child = MCTSNode(parent=node, parent_action=action, action_list=board.legal_actions(state))
     node.child_nodes[action] = child
-    child.parent = node
+
 
     # add  parent actions to child node's action
     # add stuff to mcts_node parent actions
@@ -90,7 +96,7 @@ def rollout(board, state):
         state:  The state of the game.
 
     """
-    while not state.is_ended:
+    while not board.is_ended(state):
         next_move = choice(board.legal_actions(state))
         state = board.next_state(state, next_move)
     # at the end
@@ -106,12 +112,11 @@ def backpropagate(node, won):
         won:    An indicator of whether the bot won or lost the game.
 
     """
-    # updateing visit and wins until we reach root node aka no parents
+    # updating visit and wins until we reach root node aka no parents
     leaf = node
-    while leaf.parent_action is not None:
+    while leaf is not None:
         leaf.visits = leaf.visits + 1
-        if won is 1:
-            leaf.wins = leaf.wins + 1
+        leaf.wins = leaf.wins + won
         leaf = leaf.parent
     pass
 
@@ -137,17 +142,22 @@ def think(board, state):
         node = root_node
 
         # Do MCTS - This is all you!
-        parent_node = traverse_nodes(node, board, sampled_game, identity_of_bot)
-        child_node, next_state = expand_leaf(parent_node, board, state)
-        num = rollout(board, next_state)  # result of game who won -1 = lose
-        my_value = num[identity_of_bot]
-        backpropagate(child_node, my_value)
+        parent_node, id_return = traverse_nodes(node, board, sampled_game, identity_of_bot)
+        if id_return == 0:
+            child_node = parent_node
+            next_state = state
+        else:
+            child_node, next_state = expand_leaf(parent_node, board, state)
+        num = rollout(board, next_state)  # result of game who won, tied and lose
+        my_result = num[identity_of_bot]
+        backpropagate(child_node, my_result)
     # Return an action, typically the most frequently used action (from the root) or the action with the best
     # estimated win rate.
     winRatio = []
-    for child in root_node.child_nodes:
-        winRatio.append((child, child.wins / child.visits))
+    for child in root_node.child_nodes.values():
+        winRatio.append((child, child.wins/child.visits))
     best_child = max(winRatio, key=lambda i: i[1])[0]
     # find the best child with win/visits
     # return child.parent_action
+    # print("mcts vanilla picking: ", best_child.parent_action)
     return best_child.parent_action
