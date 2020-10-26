@@ -2,7 +2,7 @@ from mcts_node import MCTSNode
 from random import choice
 from math import sqrt, log
 
-num_nodes = 100
+num_nodes = 1000
 explore_faction = 2.
 
 
@@ -20,7 +20,7 @@ def traverse_nodes(node, board, state, identity):
     """
 
     if node.untried_actions:
-        return node, 1
+        return node, 1, state
     else:  # if no untried action
         if node.child_nodes:  # check if current node has children
             prev_player = board.previous_player(state)
@@ -38,22 +38,7 @@ def traverse_nodes(node, board, state, identity):
             state = board.next_state(state, highestChild.parent_action)
             return traverse_nodes(highestChild, board, state, prev_player)
         else:
-            return node, 0
-
-    # if highestChild.untried_actions:
-    #     leaf_node = highestChild
-    # else:
-    #     if highestChild.child_nodes:
-    #         leaf_node = traverse_nodes(highestChild, board, state, identity)
-    #     else:
-    #         leaf_node = node
-    # return leaf_node
-    # for the nodes with the highest Upper Confidenc Bound
-    # if untried action, then return it
-
-    # if no untried actions and have a child then go to the child
-    # return traverse_nodes(child_node, board, state, identity) - would look something like this
-    # if no untried actions and no children then reutrn
+            return node, 0, state
     pass
 
     # Hint: return leaf_node
@@ -70,20 +55,12 @@ def expand_leaf(node, board, state):
     Returns:    The added child node.
 
     """
-    # print("State: ", state)
-    action = choice(node.untried_actions)
-    node.untried_actions.remove(action)
-    state = board.next_state(state, action)
-    # print("Updated state: ", state)
-    child = MCTSNode(parent=node, parent_action=action, action_list=board.legal_actions(state))
-    node.child_nodes[action] = child
-
-
-    # add  parent actions to child node's action
-    # add stuff to mcts_node parent actions
-
-    # temp return
-    return child, state
+    action = choice(node.untried_actions)  # pick a random untried action
+    node.untried_actions.remove(action)  # remove the chosen action, so there are no repeats
+    state_updated = board.next_state(state, action)  # change the state with chosen action
+    child = MCTSNode(parent=node, parent_action=action, action_list=board.legal_actions(state_updated))  # create new node to rep the game state
+    node.child_nodes[action] = child  # adds the child to dic of child_nodes
+    return child, state  # return new child and it's game state
     pass
     # Hint: return new_node
 
@@ -96,11 +73,10 @@ def rollout(board, state):
         state:  The state of the game.
 
     """
-    while not board.is_ended(state):
-        next_move = choice(board.legal_actions(state))
-        state = board.next_state(state, next_move)
-    # at the end
-    return board.win_values(state)
+    while not board.is_ended(state):  # checks if the game is done
+        next_move = choice(board.legal_actions(state))  # chooses a random action from avaiable actions
+        state = board.next_state(state, next_move)  # updates the state as it chooses the action
+    return board.win_values(state)  # return the game results
     pass
 
 
@@ -113,11 +89,11 @@ def backpropagate(node, won):
 
     """
     # updating visit and wins until we reach root node aka no parents
-    leaf = node
-    while leaf is not None:
-        leaf.visits = leaf.visits + 1
-        leaf.wins = leaf.wins + won
-        leaf = leaf.parent
+    leaf = node  # make a leaf pointer that would allow for us to go up the tree
+    while leaf is not None:  # goes until there is no parent
+        leaf.visits = leaf.visits + 1  # adds the number of visits
+        leaf.wins = leaf.wins + won  # add the wins and ties
+        leaf = leaf.parent  # changes pointer to be that of the parents
     pass
 
 
@@ -142,12 +118,12 @@ def think(board, state):
         node = root_node
 
         # Do MCTS - This is all you!
-        parent_node, id_return = traverse_nodes(node, board, sampled_game, identity_of_bot)
-        if id_return == 0:
+        parent_node, id_return, parent_state = traverse_nodes(node, board, sampled_game, identity_of_bot)
+        if id_return == 0:  # if no unused action and no childen
             child_node = parent_node
-            next_state = state
-        else:
-            child_node, next_state = expand_leaf(parent_node, board, state)
+            next_state = parent_state
+        else:  # if unused action
+            child_node, next_state = expand_leaf(parent_node, board, parent_state)
         num = rollout(board, next_state)  # result of game who won, tied and lose
         my_result = num[identity_of_bot]
         backpropagate(child_node, my_result)
@@ -156,6 +132,7 @@ def think(board, state):
     winRatio = []
     for child in root_node.child_nodes.values():
         winRatio.append((child, child.wins/child.visits))
+    #print(winRatio)
     best_child = max(winRatio, key=lambda i: i[1])[0]
     # find the best child with win/visits
     # return child.parent_action
